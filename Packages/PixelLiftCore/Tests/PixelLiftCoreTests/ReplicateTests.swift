@@ -60,15 +60,15 @@ final class ReplicateTests: XCTestCase {
         XCTAssertEqual(parameters["image"] as? String, "https://api.replicate.com/v1/files/file1")
     }
 
-    func testIncompleteFileAndPredictionResponsesThenSingleImageOutput() async throws {
+    func testOpaqueFileIDAndIncompleteResponsesThenSingleImageOutput() async throws {
         let (_, png, result) = try files()
         let transport = ScriptTransport([
-            .init("POST /v1/files", 201, #"{"id":"file1"}"#),
+            .init("POST /v1/files", 201, #"{"id":"a2V5fD0="}"#),
             .init("POST /v1/predictions", 201, #"{"id":"job1","status":"processing","output":{"progress":0.5}}"#),
             .init("GET /v1/predictions/job1", 200, #"{"id":"job1","status":"succeeded","output":null}"#),
             .init("GET /v1/predictions/job1", 200, #"{"id":"job1","status":"succeeded","output":["https://replicate.delivery/result.png"]}"#),
             .init("GET /result.png", 200, "test-output"),
-            .init("DELETE /v1/files/file1", 204)
+            .init("DELETE /v1/files/a2V5fD0=", 204)
         ])
         let client = try ReplicateClient(token: "unit-test-token", transport: transport) { _ in }
         try await client.run(png: png, output: result, options: options) { _ in }
@@ -77,7 +77,7 @@ final class ReplicateTests: XCTestCase {
         let payload = try XCTUnwrap(records[1].request.httpBody)
         let object = try XCTUnwrap(JSONSerialization.jsonObject(with: payload) as? [String: Any])
         let parameters = try XCTUnwrap(object["input"] as? [String: Any])
-        XCTAssertEqual(parameters["image"] as? String, "https://api.replicate.com/v1/files/file1")
+        XCTAssertEqual(parameters["image"] as? String, "https://api.replicate.com/v1/files/a2V5fD0=")
         XCTAssertEqual(try Data(contentsOf: result), Data("test-output".utf8))
     }
 
