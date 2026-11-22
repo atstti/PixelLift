@@ -68,6 +68,7 @@ final class SessionTransport: ReplicateTransport, @unchecked Sendable {
         defer { bytes.task.cancel() }
         guard let http = reply as? HTTPURLResponse else { throw PixelLiftError.invalidResponse }
         guard (200..<300).contains(http.statusCode) else { return http }
+        guard http.statusCode != 206 else { throw PixelLiftError.invalidResponse }
         guard http.expectedContentLength <= limit else { throw PixelLiftError.outputTooLarge }
         guard FileManager.default.createFile(atPath: file.path, contents: nil, attributes: [.posixPermissions: 0o600]) else {
             throw PixelLiftError.fileOperation
@@ -87,9 +88,9 @@ final class SessionTransport: ReplicateTransport, @unchecked Sendable {
                 buffer.removeAll(keepingCapacity: true)
             }
         }
-        guard count > 0, http.expectedContentLength < 0 || count == http.expectedContentLength else {
-            throw PixelLiftError.invalidResponse
-        }
+        // URLSession delivers decoded bytes, so Content-Length can describe a different size.
+        // URLSession reports transfer errors and the result is subsequently validated as an image.
+        guard count > 0 else { throw PixelLiftError.invalidResponse }
         try handle.write(contentsOf: buffer)
         return http
         #else
@@ -97,6 +98,7 @@ final class SessionTransport: ReplicateTransport, @unchecked Sendable {
         defer { try? FileManager.default.removeItem(at: temporary) }
         guard let http = reply as? HTTPURLResponse else { throw PixelLiftError.invalidResponse }
         guard (200..<300).contains(http.statusCode) else { return http }
+        guard http.statusCode != 206 else { throw PixelLiftError.invalidResponse }
         guard let size = try temporary.resourceValues(forKeys: [.fileSizeKey]).fileSize,
               size > 0 else { throw PixelLiftError.invalidResponse }
         guard size <= limit else { throw PixelLiftError.outputTooLarge }
@@ -122,9 +124,9 @@ struct ReplicateClient: Sendable {
     private static let base = URL(string: "https://api.replicate.com/v1/")!
 
     struct Uploaded: Decodable {
-        struct Links: Decodable { let get: URL }
+        struct Links: Decodable { let get: URL? }
         let id: String
-        let urls: Links
+        let urls: Links?
     }
 
     struct Prediction: Decodable {
@@ -132,6 +134,23 @@ struct ReplicateClient: Sendable {
         let id: String
         let status: Status
         let output: URL?
+
+        private enum CodingKeys: String, CodingKey { case id, status, output }
+
+        init(from decoder: Decoder) throws {
+            let values = try decoder.container(keyedBy: CodingKeys.self)
+            id = try values.decode(String.self, forKey: .id)
+            status = try values.decode(Status.self, forKey: .status)
+            if status != .succeeded {
+                output = nil
+            } else if let url = try? values.decode(URL.self, forKey: .output) {
+                output = url
+            } else if let urls = try? values.decode([URL].self, forKey: .output), urls.count == 1 {
+                output = urls.first
+            } else {
+                output = nil
+            }
+        }
     }
 
     private struct Creation: Encodable {
@@ -164,36 +183,45 @@ struct ReplicateClient: Sendable {
              progress: @escaping @Sendable (UpscaleStage) async -> Void) async throws {
         var inputID: String?
         var activeID: String?
+        var responseStage: UpscaleStage = .uploading
         do {
             await progress(.uploading)
             let input = try await upload(png)
             inputID = input.id
             try FileManager.default.removeItem(at: png)
-            guard isSecure(input.urls.get), input.urls.get.host?.lowercased() == "api.replicate.com",
-                  input.urls.get.path == "/v1/files/\(input.id)" else { throw PixelLiftError.unsafeURL }
+            let inputPath = "files/\(input.id)"
+            let inputURL = input.urls?.get ?? Self.base.appending(path: inputPath)
+            guard isSecure(inputURL), inputURL.host?.lowercased() == "api.replicate.com",
+                  inputURL.path == "/v1/\(inputPath)" else { throw PixelLiftError.unsafeURL }
             try Task.checkCancellation()
             await progress(.starting)
             try Task.checkCancellation()
-            var prediction = try await create(input.urls.get, options: options)
+            var prediction = try await create(inputURL, options: options)
             guard Self.isID(prediction.id) else { throw PixelLiftError.ambiguousSubmission }
             activeID = prediction.id
+            responseStage = .processing
             let deadline = ContinuousClock.now.advanced(by: pollingTimeout)
             while prediction.status == .starting || prediction.status == .processing {
                 guard ContinuousClock.now < deadline else { throw PixelLiftError.timedOut }
                 try Task.checkCancellation()
                 if prediction.status == .processing { await progress(.processing) }
                 try await pause(2)
-                let updated: Prediction = try await decode(request("GET", "predictions/\(prediction.id)"))
-                guard updated.id == prediction.id else { throw PixelLiftError.invalidResponse }
-                prediction = updated
+                prediction = try await fetchPrediction(prediction.id)
             }
             activeID = nil
             try Task.checkCancellation()
             switch prediction.status {
             case .succeeded:
-                guard let result = prediction.output else { throw PixelLiftError.invalidResponse }
-                guard isDeliveryURL(result) else { throw PixelLiftError.unsafeURL }
+                responseStage = .downloading
                 await progress(.downloading)
+                if prediction.output == nil {
+                    try await pause(1)
+                    prediction = try await fetchPrediction(prediction.id)
+                }
+                guard prediction.status == .succeeded, let result = prediction.output else {
+                    throw PixelLiftError.predictionOutputUnavailable
+                }
+                guard isDeliveryURL(result) else { throw PixelLiftError.unsafeURL }
                 var downloadRequest = URLRequest(url: result)
                 downloadRequest.setValue("identity", forHTTPHeaderField: "Accept-Encoding")
                 try await retry(safe: true) {
@@ -212,9 +240,16 @@ struct ReplicateClient: Sendable {
         } catch {
             let stopped = await cleanup(activeID: activeID, inputID: inputID)
             if !stopped { throw PixelLiftError.cloudCancellationUnconfirmed }
+            if (error as? PixelLiftError) == .invalidResponse { throw PixelLiftError.replicateResponse(responseStage) }
             throw error
         }
         _ = await cleanup(activeID: nil, inputID: inputID)
+    }
+
+    private func fetchPrediction(_ id: String) async throws -> Prediction {
+        let prediction: Prediction = try await decode(request("GET", "predictions/\(id)"))
+        guard prediction.id == id else { throw PixelLiftError.invalidResponse }
+        return prediction
     }
 
     private func upload(_ png: URL) async throws -> Uploaded {
@@ -333,6 +368,8 @@ struct ReplicateClient: Sendable {
                 case 429: throw PixelLiftError.rateLimited
                 default: throw PixelLiftError.http(rejection.status)
                 }
+            } catch PixelLiftError.invalidResponse where safe && attempt < 3 {
+                try await pause(pow(2, Double(attempt)) + Double.random(in: 0...0.25))
             } catch let error as URLError {
                 if Task.isCancelled { throw CancellationError() }
                 let transient: [URLError.Code] = [.timedOut, .networkConnectionLost, .notConnectedToInternet,

@@ -22,6 +22,15 @@ extension PixelLiftError {
         case .missingToken: return String(localized: "設定でReplicateのAPIキーを保存してください。")
         case .invalidToken: return String(localized: "APIキーに空白または無効な文字が含まれています。")
         case .invalidResponse: return String(localized: "Replicateから読み取れない応答が返りました。")
+        case .replicateResponse(let stage):
+            switch stage {
+            case .uploading: return String(localized: "Replicateの画像アップロード応答を読み取れませんでした。")
+            case .processing: return String(localized: "Replicateの処理状況を読み取れませんでした。ダッシュボードで結果を確認してください。")
+            case .downloading: return String(localized: "Replicateの結果を受信できませんでした。ダッシュボードで処理結果を確認してください。")
+            case .preparing, .starting: return String(localized: "Replicateから読み取れない応答が返りました。")
+            }
+        case .predictionOutputUnavailable:
+            return String(localized: "Replicateで処理は完了しましたが、結果の画像URLを取得できませんでした。ダッシュボードで処理結果を確認してください。")
         case .unsafeURL: return String(localized: "Replicateの許可ドメイン以外のURLが返りました。")
         case .unauthorized: return String(localized: "Replicateで認証できませんでした。APIキーを確認してください。")
         case .rateLimited: return String(localized: "Replicateのレート制限に達しました。時間をおいて再試行してください。")
