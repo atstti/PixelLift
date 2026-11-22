@@ -11,6 +11,7 @@
 		A00000000000000000000004 = {isa = PBXBuildFile; fileRef = A00000000000000000000014; };
 		A00000000000000000000006 = {isa = PBXBuildFile; fileRef = A00000000000000000000024; };
 		A00000000000000000000007 = {isa = PBXBuildFile; productRef = A00000000000000000000045; };
+		A00000000000000000000005 = {isa = PBXBuildFile; fileRef = A00000000000000000000015; };
 /* End PBXBuildFile section */
 /* Begin PBXFileReference section */
 		A00000000000000000000011 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PixelLiftAIApp.swift; sourceTree = "<group>"; };
@@ -20,10 +21,11 @@
 		A00000000000000000000016 = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = ja; path = ja.lproj/Localizable.strings; sourceTree = "<group>"; };
 		A00000000000000000000017 = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = PixelLiftAI.entitlements; sourceTree = "<group>"; };
 		A00000000000000000000018 = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "PixelLift AI.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		A00000000000000000000015 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Keychain.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 /* Begin PBXGroup section */
 		A00000000000000000000020 = {isa = PBXGroup; children = (A00000000000000000000021, A00000000000000000000022,); sourceTree = "<group>"; };
-		A00000000000000000000021 = {isa = PBXGroup; children = (A00000000000000000000011, A00000000000000000000012, A00000000000000000000013, A00000000000000000000014, A00000000000000000000024, A00000000000000000000017,); path = App; sourceTree = "<group>"; };
+		A00000000000000000000021 = {isa = PBXGroup; children = (A00000000000000000000011, A00000000000000000000012, A00000000000000000000013, A00000000000000000000014, A00000000000000000000015, A00000000000000000000024, A00000000000000000000017,); path = App; sourceTree = "<group>"; };
 		A00000000000000000000022 = {isa = PBXGroup; children = (A00000000000000000000018,); name = Products; sourceTree = "<group>"; };
 /* End PBXGroup section */
 /* Begin PBXVariantGroup section */
@@ -44,7 +46,7 @@
 		};
 /* End PBXNativeTarget section */
 /* Begin PBXSourcesBuildPhase section */
-		A00000000000000000000031 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A00000000000000000000001, A00000000000000000000002, A00000000000000000000003, A00000000000000000000004,); runOnlyForDeploymentPostprocessing = 0; };
+		A00000000000000000000031 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A00000000000000000000001, A00000000000000000000002, A00000000000000000000003, A00000000000000000000004, A00000000000000000000005,); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXSourcesBuildPhase section */
 /* Begin PBXFrameworksBuildPhase section */
 		A00000000000000000000032 = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (A00000000000000000000007,); runOnlyForDeploymentPostprocessing = 0; };

@@ -35,18 +35,29 @@ struct WorkspaceView: View {
                     Picker("倍率", selection: $model.scale) {
                         ForEach(UpscaleScale.allCases) { scale in Text("\(scale.rawValue)倍").tag(scale) }
                     }
-                    Text("Mockはローカル補間のみです。")
+                    if model.provider == .mock {
+                        Text("Mockはローカル補間のみです（AI処理なし）。")
+                    } else {
+                        Text("Replicateに画像を送信します。API利用料金が発生する場合があります。")
+                    }
                 }.padding().frame(minWidth: 240)
             }
             Divider()
             HStack {
                 if model.processing { ProgressView().controlSize(.small) }
+                if let stage = model.stage { Text(stage.title) }
                 if model.mockResult != nil { Text("処理完了") }
                 Spacer()
                 Button("処理を開始", action: model.start)
                     .buttonStyle(.borderedProminent)
                     .disabled(model.selected == nil || model.processing)
             }.padding()
+        }
+        .confirmationDialog("Replicateに画像を送信", isPresented: $model.confirmingCloud, titleVisibility: .visible) {
+            Button("同意して送信", action: model.confirmCloud)
+            Button("キャンセル", role: .cancel) {}
+        } message: {
+            Text("画像が外部サーバーに送信され、API利用料金が発生する可能性があります。")
         }
         .alert(item: $model.message) { message in
             Alert(title: Text(message.title), message: Text(message.text))
@@ -56,9 +67,20 @@ struct WorkspaceView: View {
 
 struct PreferencesView: View {
     @ObservedObject var model: WorkspaceModel
+    @State private var token = ""
+
     var body: some View {
         Form {
-            Text("Mock（APIキー不要）")
+            Picker("APIプロバイダー", selection: $model.provider) {
+                ForEach(ProviderChoice.allCases) { choice in Text(choice.label).tag(choice) }
+            }
+            SecureField("Replicate APIキー", text: $token)
+            HStack {
+                Button("キーチェーンに保存") { if model.saveToken(token) { token = "" } }
+                    .disabled(token.isEmpty)
+                Button("削除", action: model.removeToken).disabled(!model.tokenSaved)
+                Text(model.tokenSaved ? "保存済み" : "未設定")
+            }
             Text("PixelLift AI")
         }.padding()
     }
