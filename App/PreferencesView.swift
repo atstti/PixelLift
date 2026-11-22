@@ -2,9 +2,11 @@ import AppKit
 import PixelLiftCore
 import SwiftUI
 
+@MainActor
 struct PreferencesView: View {
     @ObservedObject var model: WorkspaceModel
     @State private var token = ""
+    @State private var confirmingClear = false
 
     var body: some View {
         Form {
@@ -46,7 +48,15 @@ struct PreferencesView: View {
                     }
                 }
             }
+            Section("ストレージ") {
+                LabeledContent("作業領域", value: sizeText(model.cacheBytes))
+                LabeledContent("キャッシュ上限", value: "512 MiB")
+                LabeledContent("アプリ本体", value: sizeText(model.bundleBytes))
+                Button("キャッシュを削除…") { confirmingClear = true }
+                    .disabled(!model.canClearCache)
+            }
             Section("API利用状況") {
+                LabeledContent("このセッションの開始要求", value: model.cloudRequests.formatted())
                 Link("Replicateの処理履歴", destination: URL(string: "https://replicate.com/predictions")!)
                 Link("Replicateの請求情報", destination: URL(string: "https://replicate.com/account/billing")!)
             }
@@ -56,8 +66,26 @@ struct PreferencesView: View {
         }
         .formStyle(.grouped)
         .frame(idealHeight: 580)
+        .task {
+            while !Task.isCancelled {
+                await model.refreshCacheUsage()
+                do { try await Task.sleep(for: .seconds(2)) }
+                catch { break }
+            }
+        }
+        .confirmationDialog("キャッシュを削除", isPresented: $confirmingClear) {
+            Button("一時的な処理結果を削除", role: .destructive, action: model.clearCache)
+            Button("キャンセル", role: .cancel) {}
+        } message: {
+            Text("プレビューや書き出しに使う一時的な処理結果を削除します。")
+        }
         .alert(item: $model.settingsMessage) { message in
             Alert(title: Text(message.title), message: Text(message.text))
         }
+    }
+
+    private func sizeText(_ bytes: Int?) -> String {
+        guard let bytes else { return "—" }
+        return ByteCountFormatter.string(fromByteCount: Int64(bytes), countStyle: .file)
     }
 }

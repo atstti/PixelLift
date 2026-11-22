@@ -21,7 +21,7 @@ public struct UpscaleOptions: Sendable {
     }
 }
 
-public enum UpscaleStage: String, Sendable {
+public enum UpscaleStage: String, Equatable, Sendable {
     case preparing, uploading, starting, processing, downloading
 }
 
@@ -38,7 +38,7 @@ public protocol CloudUpscaleProvider: Sendable {
 }
 
 public enum PixelLiftError: Error, Equatable, Sendable {
-    case invalidImage, dimensionsTooLarge, inputTooLarge, outputTooLarge, encodingFailed
+    case invalidImage, sourceChanged, dimensionsTooLarge, inputTooLarge, outputTooLarge, encodingFailed
     case cacheFull, cacheBusy, missingToken, invalidToken, invalidResponse, unsafeURL
     case unauthorized, rateLimited, timedOut, connection, ambiguousSubmission
     case http(Int), predictionFailed, predictionCanceled, cloudCancellationUnconfirmed

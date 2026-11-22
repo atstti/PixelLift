@@ -4,7 +4,8 @@ import Foundation
 public struct ReplicateUpscaleProvider: CloudUpscaleProvider {
     public let name = "Replicate"
     public let sendsImages = true
-    public let modes = UpscaleMode.allCases
+    public static let availableModes: [UpscaleMode] = [.preserveFaces, .enhanceFaces]
+    public var modes: [UpscaleMode] { Self.availableModes }
     private let client: ReplicateClient
 
     public init(token: String) throws {

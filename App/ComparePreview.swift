@@ -3,7 +3,8 @@ import PixelLiftCore
 import SwiftUI
 
 struct RenderedResult: Equatable, Sendable {
-    let url: URL
+    let ticket: ResultCache.Ticket
+    var url: URL { ticket.output }
     let info: ImageInfo
     let scale: UpscaleScale
     let provider: String
@@ -18,6 +19,7 @@ private enum PreviewZoom: Int, CaseIterable, Identifiable {
     }
 }
 
+@MainActor
 struct ComparePreview: View {
     let item: WorkspaceImage
     let result: RenderedResult?

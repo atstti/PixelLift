@@ -11,6 +11,7 @@ public struct ImageInfo: Sendable, Equatable {
     public let bytes: Int
     public let type: String
     public let frameCount: Int
+    public let modifiedAt: Date?
 }
 
 public enum ExportFormat: String, CaseIterable, Identifiable, Sendable {
@@ -33,7 +34,7 @@ public enum ImageFiles {
     private static let context = CIContext(options: [.cacheIntermediates: false])
 
     public static func inspect(_ url: URL, limit: Int = ImageLimits.importBytes) throws -> ImageInfo {
-        let values = try url.resourceValues(forKeys: [.isRegularFileKey, .fileSizeKey])
+        let values = try url.resourceValues(forKeys: [.isRegularFileKey, .fileSizeKey, .contentModificationDateKey])
         guard values.isRegularFile == true, let bytes = values.fileSize, bytes > 0 else {
             throw PixelLiftError.invalidImage
         }
@@ -49,7 +50,8 @@ public enum ImageFiles {
         try ImageLimits.check(width: width, height: height)
         let rotated = (5...8).contains(metadata[kCGImagePropertyOrientation] as? Int ?? 1)
         return ImageInfo(width: rotated ? height : width, height: rotated ? width : height,
-                         bytes: bytes, type: type, frameCount: CGImageSourceGetCount(source))
+                         bytes: bytes, type: type, frameCount: CGImageSourceGetCount(source),
+                         modifiedAt: values.contentModificationDate)
     }
 
     public static func preview(_ url: URL, maxSide: Int) throws -> CGImage {
@@ -79,7 +81,7 @@ public enum ImageFiles {
         try autoreleasepool {
             let info = try inspect(input, limit: ImageLimits.cloudBytes)
             let image = try pixels(input, info: info)
-            try write(image, to: output, format: .png)
+            try write(image, to: output, format: .png, limit: ImageLimits.cloudBytes)
             _ = try inspect(output, limit: ImageLimits.cloudBytes)
         }
     }
@@ -96,7 +98,7 @@ public enum ImageFiles {
             guard let result = context.createCGImage(scaled, from: bounds) else {
                 throw PixelLiftError.encodingFailed
             }
-            try write(result, to: output, format: .png)
+            try write(result, to: output, format: .png, limit: ImageLimits.resultBytes)
         }
     }
 
@@ -110,7 +112,7 @@ public enum ImageFiles {
             try write(image, to: tmp, format: format, quality: quality)
             let originalStem = (originalName as NSString).deletingPathExtension
             var stem = ""
-            for scalar in originalStem.unicodeScalars {
+            for scalar in originalStem.unicodeScalars where scalar != "/" && scalar.value != 0 {
                 if stem.utf8.count + String(scalar).utf8.count > 210 { break }
                 stem.unicodeScalars.append(scalar)
             }
@@ -119,18 +121,15 @@ public enum ImageFiles {
                 let suffix = index == 1 ? "" : "_\(index)"
                 let filename = "\(stem)_\(scale.rawValue)x\(suffix).\(format.fileExtension)"
                 let destination = folder.appendingPathComponent(filename)
-                do {
-                    // Same-directory rename without replacement is supported on APFS and external volumes.
-                    let status = tmp.withUnsafeFileSystemRepresentation { from in
-                        destination.withUnsafeFileSystemRepresentation { to in
-                            renamex_np(from!, to!, UInt32(RENAME_EXCL))
-                        }
+                let status = tmp.withUnsafeFileSystemRepresentation { from in
+                    destination.withUnsafeFileSystemRepresentation { to in
+                        guard let from, let to else { return EINVAL }
+                        if renamex_np(from, to, UInt32(RENAME_EXCL)) == 0 { return 0 }
+                        return errno
                     }
-                    if status == 0 { return destination }
-                    if errno != EEXIST { throw PixelLiftError.fileOperation }
-                } catch {
-                    throw error
                 }
+                if status == 0 { return destination }
+                if status != EEXIST { throw PixelLiftError.fileOperation }
             }
             throw PixelLiftError.fileOperation
         }
@@ -144,17 +143,66 @@ public enum ImageFiles {
     }
 
     private static func write(_ image: CGImage, to url: URL,
-                              format: ExportFormat, quality: Double = 0.92) throws {
-        guard let destination = CGImageDestinationCreateWithURL(url as CFURL, format.type.identifier as CFString, 1, nil) else {
-            throw PixelLiftError.encodingFailed
+                              format: ExportFormat, quality: Double = 0.92, limit: Int? = nil) throws {
+        let destination: CGImageDestination?
+        let writer: BoundedWriter?
+        if let limit {
+            let output = try BoundedWriter(url: url, limit: limit)
+            var callbacks = CGDataConsumerCallbacks(putBytes: { data, bytes, count in
+                guard let data, let bytes else { return 0 }
+                return Unmanaged<BoundedWriter>.fromOpaque(data).takeUnretainedValue().append(bytes, count: count)
+            }, releaseConsumer: nil)
+            guard let consumer = CGDataConsumer(info: Unmanaged.passUnretained(output).toOpaque(), callbacks: &callbacks) else {
+                throw PixelLiftError.encodingFailed
+            }
+            writer = output
+            destination = CGImageDestinationCreateWithDataConsumer(consumer, format.type.identifier as CFString, 1, nil)
+        } else {
+            writer = nil
+            destination = CGImageDestinationCreateWithURL(url as CFURL, format.type.identifier as CFString, 1, nil)
         }
+        guard let destination else { throw PixelLiftError.encodingFailed }
         var options: [CFString: Any] = [kCGImagePropertyOrientation: 1]
         if format == .jpeg {
             options[kCGImageDestinationLossyCompressionQuality] = min(max(quality, 0), 1)
             options[kCGImageDestinationBackgroundColor] = CGColor(gray: 1, alpha: 1)
         }
         CGImageDestinationAddImage(destination, image, options as CFDictionary)
-        guard CGImageDestinationFinalize(destination) else { throw PixelLiftError.encodingFailed }
+        let finalized = withExtendedLifetime(writer) { CGImageDestinationFinalize(destination) }
+        if writer?.overflow == true {
+            throw limit == ImageLimits.cloudBytes ? PixelLiftError.inputTooLarge : PixelLiftError.outputTooLarge
+        }
+        if writer?.writeFailed == true { throw PixelLiftError.fileOperation }
+        guard finalized else { throw PixelLiftError.encodingFailed }
+    }
+
+    private final class BoundedWriter {
+        private let handle: FileHandle
+        private var remaining: Int
+        private(set) var overflow = false
+        private(set) var writeFailed = false
+
+        init(url: URL, limit: Int) throws {
+            guard FileManager.default.createFile(atPath: url.path, contents: nil, attributes: [.posixPermissions: 0o600]) else {
+                throw PixelLiftError.fileOperation
+            }
+            handle = try FileHandle(forWritingTo: url)
+            remaining = limit
+        }
+
+        func append(_ bytes: UnsafeRawPointer, count: Int) -> Int {
+            guard !overflow, !writeFailed else { return 0 }
+            guard count <= remaining else { overflow = true; return 0 }
+            do {
+                let data = Data(bytesNoCopy: UnsafeMutableRawPointer(mutating: bytes), count: count, deallocator: .none)
+                try handle.write(contentsOf: data)
+                remaining -= count
+                return count
+            } catch {
+                writeFailed = true
+                return 0
+            }
+        }
     }
 }
 

@@ -11,6 +11,7 @@ struct UserMessage: Identifiable {
 extension PixelLiftError {
     var userText: String {
         switch self {
+        case .sourceChanged: return String(localized: "追加後に元画像が変更されました。一覧から外して追加し直してください。")
         case .invalidImage: return String(localized: "対応する画像を読み込めませんでした。")
         case .dimensionsTooLarge: return String(localized: "画像の辺が16,384 px、または面積が3,200万画素の上限を超えます。倍率を下げてください。")
         case .inputTooLarge: return String(localized: "入力画像が容量上限を超えました。")
@@ -55,7 +56,7 @@ extension UpscaleMode {
 extension UpscaleStage {
     var title: LocalizedStringKey {
         switch self {
-        case .preparing: return "送信用画像を準備中"
+        case .preparing: return "画像を準備中"
         case .uploading: return "アップロード中"
         case .starting: return "クラウドに処理を要求中"
         case .processing: return "画像を処理中"

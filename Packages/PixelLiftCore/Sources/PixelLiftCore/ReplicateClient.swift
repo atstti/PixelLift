@@ -158,6 +158,7 @@ struct ReplicateClient: Sendable {
             await progress(.uploading)
             let input = try await upload(png)
             inputID = input.id
+            try FileManager.default.removeItem(at: png)
             guard isSecure(input.urls.get), input.urls.get.host?.lowercased() == "api.replicate.com",
                   input.urls.get.path == "/v1/files/\(input.id)" else { throw PixelLiftError.unsafeURL }
             try Task.checkCancellation()
