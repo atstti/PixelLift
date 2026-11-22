@@ -2,7 +2,7 @@
 
 ## macOS のビルド結果
 
-GitHub Actions の macOS 15・Apple Silicon 環境で Release ビルドとオフラインテスト22件が成功しました。`codesign --verify --deep --strict` と arm64 アーキテクチャの検証も成功しました。`.app` のディスク使用量は 1,584 KiB です。メモリテストでは、3,000 × 2,000 px のプレビューと 2 倍出力について、XCTest のピーク物理メモリ指標が 337,414 kB でした。実行環境の単発サンプルです。 [macOS のビルド・テストログ](https://github.com/atstti/PixelLift/actions/runs/45008504623)
+GitHub Actions の macOS 15・Apple Silicon 環境で Release ビルドとオフラインテスト26件が成功しました。`codesign --verify --deep --strict` と arm64 アーキテクチャの検証も成功しました。`.app` のディスク使用量は 1,668 KiB です。メモリテストでは、3,000 × 2,000 px のプレビューと 2 倍出力について、XCTest のピーク物理メモリ指標が 339,364 kB でした。実行環境の単発サンプルです。 [macOS のビルド・テストログ](https://github.com/atstti/PixelLift/actions/runs/45009552413)
 
 ## Linux の検証結果
 
@@ -11,14 +11,14 @@ GitHub Actions の macOS 15・Apple Silicon 環境で Release ビルドとオフ
 | 確認対象 | 結果 |
 | --- | --- |
 | Swift Package ビルド | 成功 |
-| API と URLSession のスタブテスト | 11 件成功。画像アップロードID、応答の形式差、結果の再取得に加え、スキーマ、認証エラー、429、5xx、タイムアウト、キャンセル、送信上限、認証情報の送信先を確認 |
+| API と URLSession のスタブテスト | 15 件成功。画像アップロードの実装、診断、応答の形式差、結果の再取得に加え、スキーマ、認証エラー、429、5xx、タイムアウト、キャンセル、送信上限、認証情報の送信先を確認 |
 | キューとキャッシュ | 5 件成功。同時実行上限、処理待ちと実行中のキャンセル、再試行、容量上限、キャッシュ削除、起動時の残留データ削除を確認 |
 | Swift ソースの構文 | アプリ・パッケージ・テストを構文解析 |
 | Xcode プロジェクト構成 | OpenStep plist と共有スキームを解析。プロジェクト参照、アセット、アプリの entitlements を確認 |
 
 ## macOS 専用テスト
 
-macOS では `swift test --package-path Packages/PixelLiftCore` で全22件を実行できます。以下の6件は macOS 専用です。
+macOS では `swift test --package-path Packages/PixelLiftCore` で全26件を実行できます。以下の6件は macOS 専用です。
 
 | テスト | 対象 |
 | --- | --- |

@@ -4,7 +4,7 @@ macOS 14 以降向けの画像アップスケールアプリです。SwiftUI で
 
 ## ビルド済みプレビュー
 
-Apple Silicon 搭載の Mac（macOS 14 以降）で試せます。リリースの `PixelLiftAI-macOS-arm64.zip` を展開し、`PixelLift AI.app` を開きます。Xcode のインストールは不要です。プレビューにはアドホック署名を使用しています。 [macOS プレビューのダウンロード](https://github.com/atstti/PixelLift/releases/tag/v1.0.1-macos-preview)
+Apple Silicon 搭載の Mac（macOS 14 以降）で試せます。リリースの `PixelLiftAI-macOS-arm64.zip` を展開し、`PixelLift AI.app` を開きます。Xcode のインストールは不要です。プレビューにはアドホック署名を使用しています。 [macOS プレビューのダウンロード](https://github.com/atstti/PixelLift/releases/tag/v1.0.2-macos-preview)
 
 ## ソースからのビルド
 
@@ -26,7 +26,7 @@ du -sh 'build/Build/Products/Release/PixelLift AI.app'
 lipo -archs 'build/Build/Products/Release/PixelLift AI.app/Contents/MacOS/PixelLift AI'
 ```
 
-プロジェクトの署名設定はローカル実行用のアドホック署名です。一般配布用の `.app` は Developer ID Application で署名し、公証できます。目標サイズは 500 MB 以下です。GitHub Actions で作成した Apple Silicon 用 Release ビルドのディスク使用量は 1,584 KiB でした。プレビュー版の公証は未実施です。
+プロジェクトの署名設定はローカル実行用のアドホック署名です。一般配布用の `.app` は Developer ID Application で署名し、公証できます。目標サイズは 500 MB 以下です。GitHub Actions で作成した Apple Silicon 用 Release ビルドのディスク使用量は 1,668 KiB でした。プレビュー版の公証は未実施です。
 
 ## Replicate の設定
 
@@ -34,6 +34,8 @@ lipo -archs 'build/Build/Products/Release/PixelLift AI.app/Contents/MacOS/PixelL
 2. PixelLift AI の「設定」でプロバイダーを Replicate に変更します。トークンを貼り付けて「キーチェーンに保存」を押します。設定の「削除」で登録を解除できます。
 3. メイン画面で倍率とモードを選び、処理を開始します。送信先・画像件数・料金に関する確認が表示されます。同意したバッチだけを送信します。再試行でも確認します。
 4. 設定に表示する件数は、このセッションで作成を試みた予測の数です。利用履歴と請求額は Replicate で確認できます。 [処理履歴](https://replicate.com/predictions) · [請求情報](https://replicate.com/account/billing)
+
+アップロードで止まったときは、設定の「Replicateのアップロードを診断」で、保存済みのAPIトークンを使ってテスト画像の送信と応答を確認できます。診断は推論を開始しません。失敗時の表示から HTTP ステータスや応答の種類を確認できます。
 
 | 項目 | 実装 |
 | --- | --- |
