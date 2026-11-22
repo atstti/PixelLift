@@ -109,7 +109,7 @@ struct WorkspaceView: View {
                     ForEach(UpscaleScale.allCases) { scale in Text("\(scale.rawValue)倍").tag(scale) }
                 }
                 if model.provider == .replicate {
-                    Picker("モード", selection: $model.mode) {
+                    Picker("高画質化モード", selection: $model.mode) {
                         ForEach(model.provider.modes) { mode in Text(mode.title).tag(mode) }
                     }
                     if model.mode == .preserveFaces {

@@ -120,14 +120,6 @@ final class WorkspaceModel: ObservableObject {
     var consentCount: Int { pendingConsent?.ids.count ?? 0 }
 
     init() {
-        let preferences = UserDefaults.standard
-        provider = ProviderChoice(rawValue: preferences.string(forKey: "provider") ?? "") ?? .mock
-        scale = UpscaleScale(rawValue: preferences.integer(forKey: "scale")) ?? .four
-        mode = UpscaleMode(rawValue: preferences.string(forKey: "mode") ?? "") ?? .preserveFaces
-        exportFormat = ExportFormat(rawValue: preferences.string(forKey: "exportFormat") ?? "") ?? .png
-        jpegQuality = min(1, max(0.05, preferences.object(forKey: "jpegQuality") as? Double ?? 0.92))
-        concurrentJobs = min(2, max(1, preferences.integer(forKey: "concurrentJobs")))
-
         do {
             let base = try FileManager.default.url(for: .cachesDirectory, in: .userDomainMask,
                                                   appropriateFor: nil, create: true)
@@ -140,6 +132,14 @@ final class WorkspaceModel: ObservableObject {
             cache = nil
             cacheError = error as? PixelLiftError ?? .fileOperation
         }
+        let preferences = UserDefaults.standard
+        provider = ProviderChoice(rawValue: preferences.string(forKey: "provider") ?? "") ?? .mock
+        scale = UpscaleScale(rawValue: preferences.integer(forKey: "scale")) ?? .four
+        mode = UpscaleMode(rawValue: preferences.string(forKey: "mode") ?? "") ?? .preserveFaces
+        exportFormat = ExportFormat(rawValue: preferences.string(forKey: "exportFormat") ?? "") ?? .png
+        jpegQuality = min(1, max(0.05, preferences.object(forKey: "jpegQuality") as? Double ?? 0.92))
+        concurrentJobs = min(2, max(1, preferences.integer(forKey: "concurrentJobs")))
+
         if let directory = cacheDirectory {
             quitObserver = NotificationCenter.default.addObserver(forName: NSApplication.willTerminateNotification,
                                                                   object: nil, queue: .main) { _ in
@@ -293,7 +293,7 @@ final class WorkspaceModel: ObservableObject {
 
     private var currentRequest: BatchRequest {
         BatchRequest(provider: provider, options: UpscaleOptions(scale: scale,
-                     mode: provider.modes.contains(mode) ? mode : provider.modes[0]))
+                     mode: provider.modes.contains(mode) ? mode : (provider.modes.first ?? .standard)))
     }
 
     private func request(ids: [UUID], settings: BatchRequest) {

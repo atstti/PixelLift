@@ -14,6 +14,7 @@
 		A00000000000000000000005 = {isa = PBXBuildFile; fileRef = A00000000000000000000015; };
 		A00000000000000000000008 = {isa = PBXBuildFile; fileRef = A00000000000000000000019; };
 		A00000000000000000000009 = {isa = PBXBuildFile; fileRef = A0000000000000000000001A; };
+		A0000000000000000000000A = {isa = PBXBuildFile; fileRef = A0000000000000000000001B; };
 /* End PBXBuildFile section */
 /* Begin PBXFileReference section */
 		A00000000000000000000011 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PixelLiftAIApp.swift; sourceTree = "<group>"; };
@@ -26,10 +27,11 @@
 		A00000000000000000000015 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Keychain.swift; sourceTree = "<group>"; };
 		A00000000000000000000019 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComparePreview.swift; sourceTree = "<group>"; };
 		A0000000000000000000001A = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreferencesView.swift; sourceTree = "<group>"; };
+		A0000000000000000000001B = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 /* Begin PBXGroup section */
 		A00000000000000000000020 = {isa = PBXGroup; children = (A00000000000000000000021, A00000000000000000000022,); sourceTree = "<group>"; };
-		A00000000000000000000021 = {isa = PBXGroup; children = (A00000000000000000000011, A00000000000000000000012, A00000000000000000000013, A00000000000000000000014, A00000000000000000000015, A00000000000000000000024, A00000000000000000000017, A00000000000000000000019, A0000000000000000000001A,); path = App; sourceTree = "<group>"; };
+		A00000000000000000000021 = {isa = PBXGroup; children = (A00000000000000000000011, A00000000000000000000012, A00000000000000000000013, A00000000000000000000014, A00000000000000000000015, A00000000000000000000024, A00000000000000000000017, A00000000000000000000019, A0000000000000000000001A, A0000000000000000000001B,); path = App; sourceTree = "<group>"; };
 		A00000000000000000000022 = {isa = PBXGroup; children = (A00000000000000000000018,); name = Products; sourceTree = "<group>"; };
 /* End PBXGroup section */
 /* Begin PBXVariantGroup section */
@@ -56,7 +58,7 @@
 		A00000000000000000000032 = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (A00000000000000000000007,); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXFrameworksBuildPhase section */
 /* Begin PBXResourcesBuildPhase section */
-		A00000000000000000000033 = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (A00000000000000000000006,); runOnlyForDeploymentPostprocessing = 0; };
+		A00000000000000000000033 = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (A00000000000000000000006, A0000000000000000000000A,); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXResourcesBuildPhase section */
 /* Begin PBXProject section */
 		A00000000000000000000040 = {
@@ -106,6 +108,7 @@
 			SWIFT_OPTIMIZATION_LEVEL = "-O";
 		}; name = Release; };
 		A00000000000000000000052 = {isa = XCBuildConfiguration; buildSettings = {
+			ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 			CODE_SIGN_ENTITLEMENTS = App/PixelLiftAI.entitlements;
 			CODE_SIGN_IDENTITY = "-";
 			CODE_SIGN_STYLE = Manual;
@@ -117,9 +120,11 @@
 			MARKETING_VERSION = 1.0.0;
 			PRODUCT_BUNDLE_IDENTIFIER = app.pixelliftai.macos;
 			PRODUCT_NAME = "PixelLift AI";
+			SWIFT_EMIT_LOC_STRINGS = YES;
 			SWIFT_VERSION = 5.0;
 		}; name = Debug; };
 		A00000000000000000000053 = {isa = XCBuildConfiguration; buildSettings = {
+			ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 			CODE_SIGN_ENTITLEMENTS = App/PixelLiftAI.entitlements;
 			CODE_SIGN_IDENTITY = "-";
 			CODE_SIGN_STYLE = Manual;
@@ -131,6 +136,7 @@
 			MARKETING_VERSION = 1.0.0;
 			PRODUCT_BUNDLE_IDENTIFIER = app.pixelliftai.macos;
 			PRODUCT_NAME = "PixelLift AI";
+			SWIFT_EMIT_LOC_STRINGS = YES;
 			SWIFT_VERSION = 5.0;
 		}; name = Release; };
 /* End XCBuildConfiguration section */

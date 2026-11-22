@@ -23,8 +23,9 @@ final class RedirectPolicy: NSObject, URLSessionTaskDelegate {
     }
 }
 
-struct SessionTransport: ReplicateTransport {
+final class SessionTransport: ReplicateTransport, @unchecked Sendable {
     let session: URLSession
+    private let ownsSession: Bool
 
     init() {
         let settings = URLSessionConfiguration.ephemeral
@@ -36,9 +37,17 @@ struct SessionTransport: ReplicateTransport {
         settings.timeoutIntervalForRequest = 35
         settings.timeoutIntervalForResource = 100
         session = URLSession(configuration: settings, delegate: RedirectPolicy(), delegateQueue: nil)
+        ownsSession = true
     }
 
-    init(session: URLSession) { self.session = session }
+    init(session: URLSession) {
+        self.session = session
+        ownsSession = false
+    }
+
+    deinit {
+        if ownsSession { session.finishTasksAndInvalidate() }
+    }
 
     func response(for request: URLRequest, upload: URL?) async throws -> (Data, HTTPURLResponse) {
         let reply: (Data, URLResponse)
@@ -56,6 +65,7 @@ struct SessionTransport: ReplicateTransport {
     func download(_ request: URLRequest, to file: URL, limit: Int) async throws -> HTTPURLResponse {
         #if os(macOS)
         let (bytes, reply) = try await session.bytes(for: request)
+        defer { bytes.task.cancel() }
         guard let http = reply as? HTTPURLResponse else { throw PixelLiftError.invalidResponse }
         guard (200..<300).contains(http.statusCode) else { return http }
         guard http.expectedContentLength <= limit else { throw PixelLiftError.outputTooLarge }

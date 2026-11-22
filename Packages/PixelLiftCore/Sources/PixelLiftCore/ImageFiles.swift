@@ -1,4 +1,5 @@
 #if os(macOS)
+import CoreGraphics
 import CoreImage
 import Darwin
 import Foundation
@@ -149,10 +150,10 @@ public enum ImageFiles {
         if let limit {
             let output = try BoundedWriter(url: url, limit: limit)
             var callbacks = CGDataConsumerCallbacks(putBytes: { data, bytes, count in
-                guard let data, let bytes else { return 0 }
+                guard let data else { return 0 }
                 return Unmanaged<BoundedWriter>.fromOpaque(data).takeUnretainedValue().append(bytes, count: count)
             }, releaseConsumer: nil)
-            guard let consumer = CGDataConsumer(info: Unmanaged.passUnretained(output).toOpaque(), callbacks: &callbacks) else {
+            guard let consumer = CGDataConsumer(info: Unmanaged.passUnretained(output).toOpaque(), cbks: &callbacks) else {
                 throw PixelLiftError.encodingFailed
             }
             writer = output

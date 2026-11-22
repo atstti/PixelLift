@@ -38,11 +38,6 @@ struct ComparePreview: View {
         let fullResolution: Bool
     }
 
-    private struct Layers: Sendable {
-        let original: CGImage
-        let processed: CGImage?
-    }
-
     private var loadKey: LoadKey {
         LoadKey(item: item.id, result: result?.url, fullResolution: zoom != .fit)
     }
@@ -121,14 +116,18 @@ struct ComparePreview: View {
             Canvas { context, size in
                 let before = Image(decorative: layers.original, scale: 1)
                     .interpolation(zoom == .fit ? .high : .none)
-                context.draw(before, in: bounds)
                 if let processed = layers.processed {
                     let edge = size.width * separation
+                    var beforeContext = context
+                    beforeContext.clip(to: Path(CGRect(x: 0, y: 0, width: edge, height: size.height)))
+                    beforeContext.draw(before, in: bounds)
                     var afterContext = context
                     afterContext.clip(to: Path(CGRect(x: edge, y: 0, width: size.width - edge, height: size.height)))
                     let after = Image(decorative: processed, scale: 1)
                         .interpolation(zoom == .fit ? .high : .none)
                     afterContext.draw(after, in: bounds)
+                } else {
+                    context.draw(before, in: bounds)
                 }
             }
             .accessibilityLabel(layers.processed == nil ? "元画像プレビュー" : "元画像と処理結果の比較プレビュー")
@@ -178,31 +177,41 @@ struct ComparePreview: View {
         let after = result
         layers = nil
         failed = false
-        let operation = Task.detached(priority: .userInitiated) {
-            let access = url.startAccessingSecurityScopedResource()
-            defer { if access { url.stopAccessingSecurityScopedResource() } }
-            return try autoreleasepool {
-                try Task.checkCancellation()
-                let original = try key.fullResolution
-                    ? ImageFiles.pixels(url, info: before)
-                    : ImageFiles.preview(url, maxSide: 2400)
-                try Task.checkCancellation()
-                let processed = try after.map { output in
-                    try key.fullResolution
-                        ? ImageFiles.pixels(output.url, info: output.info)
-                        : ImageFiles.preview(output.url, maxSide: 2400)
-                }
-                return Layers(original: original, processed: processed)
-            }
-        }
         do {
-            let loaded = try await withTaskCancellationHandler {
-                try await operation.value
-            } onCancel: { operation.cancel() }
+            let loaded = try await PreviewDecoder.shared.load(url: url, info: before, result: after,
+                                                              fullResolution: key.fullResolution)
             try Task.checkCancellation()
             layers = loaded
         } catch {
             if !Task.isCancelled { failed = true }
         }
+    }
+}
+
+private struct Layers: Sendable {
+    let original: CGImage
+    let processed: CGImage?
+}
+
+private actor PreviewDecoder {
+    static let shared = PreviewDecoder()
+
+    func load(url: URL, info: ImageInfo, result: RenderedResult?, fullResolution: Bool) throws -> Layers {
+        let access = url.startAccessingSecurityScopedResource()
+        defer { if access { url.stopAccessingSecurityScopedResource() } }
+        return try autoreleasepool {
+            try Task.checkCancellation()
+            let original = try loadImage(url, info: info, fullResolution: fullResolution)
+            try Task.checkCancellation()
+            let processed = try result.map { output in
+                try loadImage(output.url, info: output.info, fullResolution: fullResolution)
+            }
+            return Layers(original: original, processed: processed)
+        }
+    }
+
+    private func loadImage(_ url: URL, info: ImageInfo, fullResolution: Bool) throws -> CGImage {
+        if fullResolution { return try ImageFiles.pixels(url, info: info) }
+        return try ImageFiles.preview(url, maxSide: 2400)
     }
 }
