@@ -86,6 +86,8 @@ final class WorkspaceModel: ObservableObject {
         }
     }
     @Published private(set) var tokenSaved = false
+    @Published private(set) var checkingReplicateUpload = false
+    @Published private(set) var replicateUploadStatus: String?
     @Published private(set) var exportFolder: URL?
     @Published private(set) var saving = false
     @Published private(set) var maintainingCache = false
@@ -187,6 +189,7 @@ final class WorkspaceModel: ObservableObject {
         do {
             try ReplicateKeychain.save(token.trimmingCharacters(in: .whitespacesAndNewlines))
             tokenSaved = true
+            replicateUploadStatus = nil
             return true
         } catch {
             settingsMessage = UserMessage(title: "APIキーの設定", text: userText(error))
@@ -198,8 +201,25 @@ final class WorkspaceModel: ObservableObject {
         do {
             try ReplicateKeychain.remove()
             tokenSaved = false
+            replicateUploadStatus = nil
         } catch {
             settingsMessage = UserMessage(title: "APIキーの設定", text: userText(error))
+        }
+    }
+
+    func checkReplicateUpload() {
+        guard tokenSaved, !checkingReplicateUpload else { return }
+        checkingReplicateUpload = true
+        replicateUploadStatus = nil
+        Task {
+            defer { checkingReplicateUpload = false }
+            do {
+                let provider = try ReplicateUpscaleProvider(token: ReplicateKeychain.read() ?? "")
+                try await provider.checkUpload()
+                replicateUploadStatus = String(localized: "Replicateへのテスト画像のアップロードが成功しました。")
+            } catch {
+                replicateUploadStatus = userText(error)
+            }
         }
     }
 

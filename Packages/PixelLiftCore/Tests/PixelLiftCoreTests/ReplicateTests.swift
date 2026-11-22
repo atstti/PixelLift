@@ -46,7 +46,8 @@ final class ReplicateTests: XCTestCase {
         for record in records where record.request.url?.host == "api.replicate.com" {
             XCTAssertEqual(record.request.value(forHTTPHeaderField: "Authorization"), "Bearer unit-test-token")
         }
-        let multipart = try XCTUnwrap(records[0].upload)
+        let multipartBytes = try XCTUnwrap(records[0].request.httpBody)
+        let multipart = String(decoding: multipartBytes, as: UTF8.self)
         XCTAssertTrue(multipart.contains("name=\"content\"; filename=\"input.png\""))
         XCTAssertTrue(multipart.contains("Content-Type: image/png"))
         let submission = try XCTUnwrap(records[2].request.httpBody)
@@ -81,13 +82,59 @@ final class ReplicateTests: XCTestCase {
         XCTAssertEqual(try Data(contentsOf: result), Data("test-output".utf8))
     }
 
-    func testMalformedUploadReportsTheUploadStage() async throws {
+    func testMalformedUploadReportsSafeResponseMetadata() async throws {
         let (_, png, result) = try files()
-        let transport = ScriptTransport([.init("POST /v1/files", 201, #"{"unexpected":"response"}"#)])
+        let response = #"{"unexpected":"sensitive content never shown"}"#
+        let transport = ScriptTransport([.init("POST /v1/files", 201, response)])
         let client = try ReplicateClient(token: "unit-test-token", transport: transport) { _ in }
-        await expect(.replicateResponse(.uploading)) {
+        await expect(.uploadResponse(status: 201, bytes: response.utf8.count, problem: .missingID)) {
             try await client.run(png: png, output: result, options: self.options) { _ in }
         }
+    }
+
+    func testUploadDiagnosticSendsOnlySyntheticImageAndDeletesIt() async throws {
+        let transport = ScriptTransport([
+            .init("POST /v1/files", 201, headers: ["Location": "/v1/files/fixture.1="]),
+            .init("DELETE /v1/files/fixture.1=", 204)
+        ])
+        let client = try ReplicateClient(token: "unit-test-token", transport: transport) { _ in }
+        try await client.checkUpload()
+        let records = await transport.records
+        XCTAssertEqual(records.count, 2)
+        let body = try XCTUnwrap(records.first?.request.httpBody)
+        XCTAssertNotNil(body.range(of: Data([137, 80, 78, 71, 13, 10, 26, 10])))
+    }
+
+    func testUploadDiagnosticDoesNotUseAnUntrustedLocation() async throws {
+        let transport = ScriptTransport([
+            .init("POST /v1/files", 201, headers: ["Location": "https://example.invalid/v1/files/file1"])
+        ])
+        let client = try ReplicateClient(token: "unit-test-token", transport: transport) { _ in }
+        await expect(.uploadResponse(status: 201, bytes: 0, problem: .empty)) {
+            try await client.checkUpload()
+        }
+        let hosts = await transport.records.compactMap { $0.request.url?.host }
+        XCTAssertEqual(hosts, ["api.replicate.com"])
+    }
+
+    func testUploadDiagnosticReportsHTMLWithoutExposingIt() async throws {
+        let response = "<html>private details</html>"
+        let transport = ScriptTransport([
+            .init("POST /v1/files", 200, response, headers: ["Content-Type": "text/html; charset=utf-8"])
+        ])
+        let client = try ReplicateClient(token: "unit-test-token", transport: transport) { _ in }
+        await expect(.uploadResponse(status: 200, bytes: response.utf8.count, problem: .html)) {
+            try await client.checkUpload()
+        }
+    }
+
+    func testURLSessionSendsMultipartBodyAndReceivesFileJSON() async throws {
+        let config = URLSessionConfiguration.ephemeral
+        config.protocolClasses = [UploadSessionStub.self]
+        let session = URLSession(configuration: config)
+        defer { session.invalidateAndCancel() }
+        let client = try ReplicateClient(token: "unit-test-token", transport: SessionTransport(session: session)) { _ in }
+        try await client.checkUpload()
     }
 
     func testMissingOutputDoesNotCreateAnotherPrediction() async throws {
@@ -221,7 +268,7 @@ final class ReplicateTests: XCTestCase {
         let transport = SessionTransport(session: session)
         var request = URLRequest(url: URL(string: "https://api.replicate.com/v1/predictions/job1")!)
         request.setValue("Bearer unit-test-token", forHTTPHeaderField: "Authorization")
-        let (bytes, response) = try await transport.response(for: request, upload: nil)
+        let (bytes, response) = try await transport.response(for: request)
         XCTAssertEqual(response.statusCode, 200)
         XCTAssertEqual(String(decoding: bytes, as: UTF8.self), "Bearer unit-test-token")
     }
@@ -263,6 +310,54 @@ private final class SessionStub: URLProtocol, @unchecked Sendable {
     override func stopLoading() {}
 }
 
+private final class UploadSessionStub: URLProtocol, @unchecked Sendable {
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+
+    override func startLoading() {
+        guard let url = request.url else { return }
+        XCTAssertEqual(url.host, "api.replicate.com")
+        XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer unit-test-token")
+        let status: Int
+        let body: Data
+
+        switch (request.httpMethod, url.path) {
+        case ("POST", "/v1/files"):
+            let contentType = request.value(forHTTPHeaderField: "Content-Type") ?? ""
+            XCTAssertTrue(contentType.hasPrefix("multipart/form-data; boundary="))
+            var requestBody = request.httpBody ?? Data()
+            if requestBody.isEmpty, let stream = request.httpBodyStream {
+                stream.open()
+                defer { stream.close() }
+                var bytes = [UInt8](repeating: 0, count: 1024)
+                while true {
+                    let length = stream.read(&bytes, maxLength: bytes.count)
+                    guard length > 0 else { break }
+                    requestBody.append(contentsOf: bytes.prefix(length))
+                }
+            }
+            XCTAssertNotNil(requestBody.range(of: Data([137, 80, 78, 71, 13, 10, 26, 10])))
+            status = 201
+            body = Data(#"{"id":"file1","urls":{"get":"https://api.replicate.com/v1/files/file1"}}"#.utf8)
+        case ("DELETE", "/v1/files/file1"):
+            status = 204
+            body = Data()
+        default:
+            XCTFail("Unexpected diagnostic request")
+            status = 500
+            body = Data()
+        }
+
+        let response = HTTPURLResponse(url: url, statusCode: status, httpVersion: "HTTP/1.1",
+                                       headerFields: ["Content-Type": "application/json"])!
+        client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+        if !body.isEmpty { client?.urlProtocol(self, didLoad: body) }
+        client?.urlProtocolDidFinishLoading(self)
+    }
+
+    override func stopLoading() {}
+}
+
 private actor Trace<Value: Sendable> {
     private(set) var items: [Value] = []
     func add(_ item: Value) { items.append(item) }
@@ -285,7 +380,6 @@ private actor ScriptTransport: ReplicateTransport {
 
     struct Record: Sendable {
         let request: URLRequest
-        let upload: String?
     }
 
     private var steps: [Step]
@@ -294,22 +388,21 @@ private actor ScriptTransport: ReplicateTransport {
 
     init(_ steps: [Step]) { self.steps = steps }
 
-    func response(for request: URLRequest, upload: URL?) async throws -> (Data, HTTPURLResponse) {
-        try next(request, upload: upload)
+    func response(for request: URLRequest) async throws -> (Data, HTTPURLResponse) {
+        try next(request)
     }
 
     func download(_ request: URLRequest, to file: URL, limit: Int) async throws -> HTTPURLResponse {
         XCTAssertEqual(limit, ImageLimits.resultBytes)
-        let (bytes, response) = try next(request, upload: nil)
+        let (bytes, response) = try next(request)
         if response.statusCode == 200 { try bytes.write(to: file) }
         return response
     }
 
-    private func next(_ request: URLRequest, upload: URL?) throws -> (Data, HTTPURLResponse) {
+    private func next(_ request: URLRequest) throws -> (Data, HTTPURLResponse) {
         let url = try XCTUnwrap(request.url)
         let route = "\(request.httpMethod ?? "GET") \(url.path)"
-        let body = try upload.map { try String(contentsOf: $0, encoding: .utf8) }
-        records.append(Record(request: request, upload: body))
+        records.append(Record(request: request))
         guard let step = steps.first else {
             XCTFail("Unexpected request: \(route)")
             throw PixelLiftError.invalidResponse

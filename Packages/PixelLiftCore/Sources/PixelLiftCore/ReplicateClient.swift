@@ -4,7 +4,7 @@ import FoundationNetworking
 #endif
 
 protocol ReplicateTransport: Sendable {
-    func response(for request: URLRequest, upload: URL?) async throws -> (Data, HTTPURLResponse)
+    func response(for request: URLRequest) async throws -> (Data, HTTPURLResponse)
     func download(_ request: URLRequest, to file: URL, limit: Int) async throws -> HTTPURLResponse
 }
 
@@ -49,17 +49,10 @@ final class SessionTransport: ReplicateTransport, @unchecked Sendable {
         if ownsSession { session.finishTasksAndInvalidate() }
     }
 
-    func response(for request: URLRequest, upload: URL?) async throws -> (Data, HTTPURLResponse) {
-        let reply: (Data, URLResponse)
-        if let upload {
-            reply = try await session.upload(for: request, fromFile: upload)
-        } else {
-            reply = try await session.data(for: request)
-        }
-        guard let http = reply.1 as? HTTPURLResponse, reply.0.count <= 1_048_576 else {
-            throw PixelLiftError.invalidResponse
-        }
-        return (reply.0, http)
+    func response(for request: URLRequest) async throws -> (Data, HTTPURLResponse) {
+        let (body, reply) = try await session.data(for: request)
+        guard let response = reply as? HTTPURLResponse else { throw PixelLiftError.invalidResponse }
+        return (body, response)
     }
 
     func download(_ request: URLRequest, to file: URL, limit: Int) async throws -> HTTPURLResponse {
@@ -123,10 +116,30 @@ struct ReplicateClient: Sendable {
     static let version = "f121d640bd286e1fdc67f9799164c1d5be36ff74576ee11c803ae5b665dd46aa"
     private static let base = URL(string: "https://api.replicate.com/v1/")!
 
-    struct Uploaded: Decodable {
-        struct Links: Decodable { let get: URL? }
+    private struct Uploaded {
         let id: String
-        let urls: Links?
+        let link: URL?
+
+        func predictionInput() throws -> URL {
+            let path = "files/\(id)"
+            let url = link ?? ReplicateClient.base.appending(path: path)
+            guard ReplicateClient.fileID(at: url) == id else { throw PixelLiftError.unsafeURL }
+            return url
+        }
+    }
+
+    private struct UploadBody: Decodable {
+        struct Links: Decodable { let get: String? }
+        let id: String?
+        let links: Links?
+
+        private enum CodingKeys: String, CodingKey { case id, urls }
+
+        init(from decoder: Decoder) throws {
+            let values = try decoder.container(keyedBy: CodingKeys.self)
+            id = try? values.decode(String.self, forKey: .id)
+            links = try? values.decode(Links.self, forKey: .urls)
+        }
     }
 
     struct Prediction: Decodable {
@@ -189,10 +202,7 @@ struct ReplicateClient: Sendable {
             let input = try await upload(png)
             inputID = input.id
             try FileManager.default.removeItem(at: png)
-            let inputPath = "files/\(input.id)"
-            let inputURL = input.urls?.get ?? Self.base.appending(path: inputPath)
-            guard isSecure(inputURL), inputURL.host?.lowercased() == "api.replicate.com",
-                  inputURL.path == "/v1/\(inputPath)" else { throw PixelLiftError.unsafeURL }
+            let inputURL = try input.predictionInput()
             try Task.checkCancellation()
             await progress(.starting)
             try Task.checkCancellation()
@@ -252,25 +262,60 @@ struct ReplicateClient: Sendable {
         return prediction
     }
 
+    func checkUpload() async throws {
+        let samplePNG = Data(base64Encoded: "iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAIAAAAmkwkpAAAAGklEQVR4nGOQSJzz6NEjCMkAZ0kkzmHAKQMABDEd2f5HBtgAAAAASUVORK5CYII=")!
+        let uploaded = try await upload(image: samplePNG)
+        _ = await cleanup(activeID: nil, inputID: uploaded.id)
+        _ = try uploaded.predictionInput()
+    }
+
     private func upload(_ png: URL) async throws -> Uploaded {
         let values = try png.resourceValues(forKeys: [.isRegularFileKey, .fileSizeKey])
         guard values.isRegularFile == true, let size = values.fileSize, size > 0 else {
             throw PixelLiftError.invalidImage
         }
         guard size <= ImageLimits.cloudBytes else { throw PixelLiftError.inputTooLarge }
+        return try await upload(image: Data(contentsOf: png, options: .mappedIfSafe))
+    }
+
+    private func upload(image: Data) async throws -> Uploaded {
+        guard !image.isEmpty else { throw PixelLiftError.invalidImage }
+        guard image.count <= ImageLimits.cloudBytes else { throw PixelLiftError.inputTooLarge }
         let boundary = UUID().uuidString
-        let multipart = png.deletingLastPathComponent().appendingPathComponent(UUID().uuidString)
-        defer { try? FileManager.default.removeItem(at: multipart) }
-        try Self.writeMultipart(from: png, to: multipart, boundary: boundary)
         var uploadRequest = request("POST", "files")
         uploadRequest.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
-        let uploaded: Uploaded = try await decode(uploadRequest, upload: multipart)
-        // File IDs are opaque and may use base64, including padding. Keep them within one path segment.
-        guard !uploaded.id.isEmpty, uploaded.id.utf8.count <= 512,
-              uploaded.id.utf8.allSatisfy({ Self.isIDByte($0) || $0 == 43 || $0 == 61 }) else {
-            throw PixelLiftError.invalidResponse
+        uploadRequest.httpBody = Self.multipartBody(image: image, boundary: boundary)
+
+        // Keep the response metadata for a diagnostic. The response body is never shown or logged.
+        let (data, response) = try await send(uploadRequest)
+        let body = data.count <= Self.responseLimit ? try? JSONDecoder().decode(UploadBody.self, from: data) : nil
+        let location = response.statusCode == 201
+            ? response.value(forHTTPHeaderField: "Location").flatMap { URL(string: $0, relativeTo: Self.base)?.absoluteURL }
+            : nil
+        let bodyLink = body?.links?.get.flatMap { URL(string: $0, relativeTo: Self.base)?.absoluteURL }
+        let link = bodyLink ?? location.flatMap { Self.fileID(at: $0) == nil ? nil : $0 }
+        if let id = body?.id, Self.isFileID(id) {
+            return Uploaded(id: id, link: link)
         }
-        return uploaded
+        if let link, let id = Self.fileID(at: link) {
+            return Uploaded(id: id, link: link)
+        }
+
+        let problem: ReplicateUploadProblem
+        if data.isEmpty {
+            problem = .empty
+        } else if data.count > Self.responseLimit {
+            problem = .tooLarge
+        } else if body?.id != nil {
+            problem = .invalidID
+        } else if body != nil {
+            problem = .missingID
+        } else if response.mimeType?.lowercased() == "text/html" {
+            problem = .html
+        } else {
+            problem = .unreadable
+        }
+        throw PixelLiftError.uploadResponse(status: response.statusCode, bytes: data.count, problem: problem)
     }
 
     private func create(_ image: URL, options: UpscaleOptions) async throws -> Prediction {
@@ -319,18 +364,21 @@ struct ReplicateClient: Sendable {
         return request
     }
 
-    private func decode<T: Decodable>(_ request: URLRequest, upload: URL? = nil) async throws -> T {
-        let data = try await send(request, upload: upload)
+    private static let responseLimit = 1_048_576
+
+    private func decode<T: Decodable>(_ request: URLRequest) async throws -> T {
+        let (data, _) = try await send(request)
+        guard data.count <= Self.responseLimit else { throw PixelLiftError.invalidResponse }
         do { return try JSONDecoder().decode(T.self, from: data) }
         catch { throw PixelLiftError.invalidResponse }
     }
 
-    private func send(_ request: URLRequest, upload: URL? = nil) async throws -> Data {
+    private func send(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
         let safe = request.httpMethod == "GET" || request.httpMethod == "DELETE"
         return try await retry(safe: safe) {
-            let (data, response) = try await transport.response(for: request, upload: upload)
-            try validate(response)
-            return data
+            let reply = try await transport.response(for: request)
+            try validate(reply.1)
+            return reply
         }
     }
 
@@ -396,24 +444,26 @@ struct ReplicateClient: Sendable {
         (48...57).contains(byte) || (65...90).contains(byte) || (97...122).contains(byte) || byte == 45 || byte == 95
     }
 
-    private static func writeMultipart(from png: URL, to file: URL, boundary: String) throws {
-        guard FileManager.default.createFile(atPath: file.path, contents: nil, attributes: [.posixPermissions: 0o600]) else {
-            throw PixelLiftError.fileOperation
-        }
-        let source = try FileHandle(forReadingFrom: png)
-        defer { try? source.close() }
-        let target = try FileHandle(forWritingTo: file)
-        defer { try? target.close() }
+    private static func isFileID(_ id: String) -> Bool {
+        !id.isEmpty && id != "." && id != ".." && id.utf8.count <= 512
+            && id.utf8.allSatisfy { isIDByte($0) || "+=.~".utf8.contains($0) }
+    }
+
+    private static func fileID(at url: URL) -> String? {
+        let prefix = "/v1/files/"
+        guard isSecure(url), url.host?.lowercased() == "api.replicate.com",
+              url.fragment == nil, url.path.hasPrefix(prefix) else { return nil }
+        let id = String(url.path.dropFirst(prefix.count))
+        return isFileID(id) ? id : nil
+    }
+
+    private static func multipartBody(image: Data, boundary: String) -> Data {
         let header = "--\(boundary)\r\nContent-Disposition: form-data; name=\"content\"; filename=\"input.png\"\r\nContent-Type: image/png\r\n\r\n"
-        try target.write(contentsOf: Data(header.utf8))
-        var copied = 0
-        while let chunk = try source.read(upToCount: 65_536), !chunk.isEmpty {
-            try Task.checkCancellation()
-            copied += chunk.count
-            guard copied <= ImageLimits.cloudBytes else { throw PixelLiftError.inputTooLarge }
-            try target.write(contentsOf: chunk)
-        }
-        guard copied > 0 else { throw PixelLiftError.invalidImage }
-        try target.write(contentsOf: Data("\r\n--\(boundary)--\r\n".utf8))
+        let footer = "\r\n--\(boundary)--\r\n"
+        var body = Data(capacity: header.utf8.count + image.count + footer.utf8.count)
+        body.append(contentsOf: header.utf8)
+        body.append(image)
+        body.append(contentsOf: footer.utf8)
+        return body
     }
 }

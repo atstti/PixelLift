@@ -17,12 +17,26 @@ struct PreferencesView: View {
                 SecureField("Replicate APIキー", text: $token)
                 HStack {
                     Button("キーチェーンに保存") { if model.saveToken(token) { token = "" } }
-                        .disabled(token.isEmpty)
-                    Button("削除", action: model.removeToken).disabled(!model.tokenSaved)
+                        .disabled(token.isEmpty || model.checkingReplicateUpload)
+                    Button("削除", action: model.removeToken)
+                        .disabled(!model.tokenSaved || model.checkingReplicateUpload)
                     Text(model.tokenSaved ? "保存済み" : "未設定")
                         .foregroundStyle(.secondary)
                     Spacer()
                     Link("ReplicateのAPIキー", destination: URL(string: "https://replicate.com/account/api-tokens")!)
+                }
+                HStack {
+                    Button("Replicateのアップロードを診断", action: model.checkReplicateUpload)
+                        .disabled(!model.tokenSaved || model.checkingReplicateUpload || model.busy)
+                        .help("テスト画像を1枚送信し、アップロードの応答を確認します。")
+                    if model.checkingReplicateUpload {
+                        ProgressView().controlSize(.small)
+                    }
+                }
+                if let status = model.replicateUploadStatus {
+                    Text(status)
+                        .foregroundStyle(.secondary)
+                        .textSelection(.enabled)
                 }
             }
             Section("書き出し") {

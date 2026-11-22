@@ -12,6 +12,10 @@ public struct ReplicateUpscaleProvider: CloudUpscaleProvider {
         client = try ReplicateClient(token: token)
     }
 
+    public func checkUpload() async throws {
+        try await client.checkUpload()
+    }
+
     public func upscale(input: URL, output: URL, options: UpscaleOptions,
                         progress: @escaping @Sendable (UpscaleStage) async -> Void) async throws {
         await progress(.preparing)
