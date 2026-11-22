@@ -1,0 +1,41 @@
+name: macOS preview
+
+on:
+  push:
+    branches: [codex/macos-preview]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Build the Apple Silicon app
+        run: |
+          xcodebuild -version
+          xcodebuild -quiet -project PixelLiftAI.xcodeproj -scheme PixelLiftAI \
+            -configuration Release -destination 'generic/platform=macOS' \
+            -derivedDataPath "$RUNNER_TEMP/pixellift" ARCHS=arm64 ONLY_ACTIVE_ARCH=NO build
+      - name: Run offline macOS tests
+        run: swift test --package-path Packages/PixelLiftCore
+      - name: Verify and archive the application
+        run: |
+          app="$RUNNER_TEMP/pixellift/Build/Products/Release/PixelLift AI.app"
+          codesign --verify --deep --strict "$app"
+          test "$(lipo -archs "$app/Contents/MacOS/PixelLift AI")" = arm64
+          du -sk "$app"
+          ditto -c -k --sequesterRsrc --keepParent "$app" "$RUNNER_TEMP/PixelLiftAI-macOS-arm64.zip"
+          shasum -a 256 "$RUNNER_TEMP/PixelLiftAI-macOS-arm64.zip"
+      - name: Save the macOS preview
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: PixelLiftAI-macOS-arm64
+          path: ${{ runner.temp }}/PixelLiftAI-macOS-arm64.zip
+          if-no-files-found: error
+          retention-days: 14
