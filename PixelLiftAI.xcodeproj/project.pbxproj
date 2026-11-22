@@ -1,0 +1,133 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {};
+	objectVersion = 56;
+	objects = {
+/* Begin PBXBuildFile section */
+		A00000000000000000000001 = {isa = PBXBuildFile; fileRef = A00000000000000000000011; };
+		A00000000000000000000002 = {isa = PBXBuildFile; fileRef = A00000000000000000000012; };
+		A00000000000000000000003 = {isa = PBXBuildFile; fileRef = A00000000000000000000013; };
+		A00000000000000000000004 = {isa = PBXBuildFile; fileRef = A00000000000000000000014; };
+		A00000000000000000000006 = {isa = PBXBuildFile; fileRef = A00000000000000000000024; };
+		A00000000000000000000007 = {isa = PBXBuildFile; productRef = A00000000000000000000045; };
+/* End PBXBuildFile section */
+/* Begin PBXFileReference section */
+		A00000000000000000000011 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PixelLiftAIApp.swift; sourceTree = "<group>"; };
+		A00000000000000000000012 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Labels.swift; sourceTree = "<group>"; };
+		A00000000000000000000013 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceModel.swift; sourceTree = "<group>"; };
+		A00000000000000000000014 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceView.swift; sourceTree = "<group>"; };
+		A00000000000000000000016 = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = ja; path = ja.lproj/Localizable.strings; sourceTree = "<group>"; };
+		A00000000000000000000017 = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = PixelLiftAI.entitlements; sourceTree = "<group>"; };
+		A00000000000000000000018 = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "PixelLift AI.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+/* Begin PBXGroup section */
+		A00000000000000000000020 = {isa = PBXGroup; children = (A00000000000000000000021, A00000000000000000000022,); sourceTree = "<group>"; };
+		A00000000000000000000021 = {isa = PBXGroup; children = (A00000000000000000000011, A00000000000000000000012, A00000000000000000000013, A00000000000000000000014, A00000000000000000000024, A00000000000000000000017,); path = App; sourceTree = "<group>"; };
+		A00000000000000000000022 = {isa = PBXGroup; children = (A00000000000000000000018,); name = Products; sourceTree = "<group>"; };
+/* End PBXGroup section */
+/* Begin PBXVariantGroup section */
+		A00000000000000000000024 = {isa = PBXVariantGroup; children = (A00000000000000000000016,); name = Localizable.strings; sourceTree = "<group>"; };
+/* End PBXVariantGroup section */
+/* Begin PBXNativeTarget section */
+		A00000000000000000000030 = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A00000000000000000000043;
+			buildPhases = (A00000000000000000000031, A00000000000000000000032, A00000000000000000000033,);
+			buildRules = ();
+			dependencies = ();
+			name = PixelLiftAI;
+			packageProductDependencies = (A00000000000000000000045,);
+			productName = "PixelLift AI";
+			productReference = A00000000000000000000018;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+/* Begin PBXSourcesBuildPhase section */
+		A00000000000000000000031 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A00000000000000000000001, A00000000000000000000002, A00000000000000000000003, A00000000000000000000004,); runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXSourcesBuildPhase section */
+/* Begin PBXFrameworksBuildPhase section */
+		A00000000000000000000032 = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (A00000000000000000000007,); runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXFrameworksBuildPhase section */
+/* Begin PBXResourcesBuildPhase section */
+		A00000000000000000000033 = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (A00000000000000000000006,); runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXResourcesBuildPhase section */
+/* Begin PBXProject section */
+		A00000000000000000000040 = {
+			isa = PBXProject;
+			attributes = { BuildIndependentTargetsInParallel = YES; LastUpgradeCheck = 1600; };
+			buildConfigurationList = A00000000000000000000042;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = ja;
+			hasScannedForEncodings = 0;
+			knownRegions = (ja,);
+			mainGroup = A00000000000000000000020;
+			packageReferences = (A00000000000000000000044,);
+			productRefGroup = A00000000000000000000022;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (A00000000000000000000030,);
+		};
+/* End PBXProject section */
+/* Begin XCConfigurationList section */
+		A00000000000000000000042 = {isa = XCConfigurationList; buildConfigurations = (A00000000000000000000050, A00000000000000000000051,); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+		A00000000000000000000043 = {isa = XCConfigurationList; buildConfigurations = (A00000000000000000000052, A00000000000000000000053,); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+/* End XCConfigurationList section */
+/* Begin XCLocalSwiftPackageReference section */
+		A00000000000000000000044 = {isa = XCLocalSwiftPackageReference; relativePath = Packages/PixelLiftCore; };
+/* End XCLocalSwiftPackageReference section */
+/* Begin XCSwiftPackageProductDependency section */
+		A00000000000000000000045 = {isa = XCSwiftPackageProductDependency; package = A00000000000000000000044; productName = PixelLiftCore; };
+/* End XCSwiftPackageProductDependency section */
+/* Begin XCBuildConfiguration section */
+		A00000000000000000000050 = {isa = XCBuildConfiguration; buildSettings = {
+			CLANG_ENABLE_MODULES = YES;
+			DEBUG_INFORMATION_FORMAT = dwarf;
+			ENABLE_TESTABILITY = YES;
+			MACOSX_DEPLOYMENT_TARGET = 14.0;
+			ONLY_ACTIVE_ARCH = YES;
+			SDKROOT = macosx;
+			SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+			SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+		}; name = Debug; };
+		A00000000000000000000051 = {isa = XCBuildConfiguration; buildSettings = {
+			CLANG_ENABLE_MODULES = YES;
+			DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+			MACOSX_DEPLOYMENT_TARGET = 14.0;
+			ONLY_ACTIVE_ARCH = NO;
+			SDKROOT = macosx;
+			SWIFT_COMPILATION_MODE = wholemodule;
+			SWIFT_OPTIMIZATION_LEVEL = "-O";
+		}; name = Release; };
+		A00000000000000000000052 = {isa = XCBuildConfiguration; buildSettings = {
+			CODE_SIGN_ENTITLEMENTS = App/PixelLiftAI.entitlements;
+			CODE_SIGN_IDENTITY = "-";
+			CODE_SIGN_STYLE = Manual;
+			CURRENT_PROJECT_VERSION = 1;
+			ENABLE_APP_SANDBOX = YES;
+			ENABLE_HARDENED_RUNTIME = YES;
+			GENERATE_INFOPLIST_FILE = YES;
+			INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.graphics-design";
+			MARKETING_VERSION = 1.0.0;
+			PRODUCT_BUNDLE_IDENTIFIER = app.pixelliftai.macos;
+			PRODUCT_NAME = "PixelLift AI";
+			SWIFT_VERSION = 5.0;
+		}; name = Debug; };
+		A00000000000000000000053 = {isa = XCBuildConfiguration; buildSettings = {
+			CODE_SIGN_ENTITLEMENTS = App/PixelLiftAI.entitlements;
+			CODE_SIGN_IDENTITY = "-";
+			CODE_SIGN_STYLE = Manual;
+			CURRENT_PROJECT_VERSION = 1;
+			ENABLE_APP_SANDBOX = YES;
+			ENABLE_HARDENED_RUNTIME = YES;
+			GENERATE_INFOPLIST_FILE = YES;
+			INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.graphics-design";
+			MARKETING_VERSION = 1.0.0;
+			PRODUCT_BUNDLE_IDENTIFIER = app.pixelliftai.macos;
+			PRODUCT_NAME = "PixelLift AI";
+			SWIFT_VERSION = 5.0;
+		}; name = Release; };
+/* End XCBuildConfiguration section */
+	};
+	rootObject = A00000000000000000000040;
+}

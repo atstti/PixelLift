@@ -1,0 +1,4 @@
+/* Japanese strings use Japanese source keys as their default values. */
+"画像を開く…" = "画像を開く…";
+"画像を追加…" = "画像を追加…";
+"処理を開始" = "処理を開始";
