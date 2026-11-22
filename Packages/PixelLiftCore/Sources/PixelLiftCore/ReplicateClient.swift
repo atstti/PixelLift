@@ -265,7 +265,11 @@ struct ReplicateClient: Sendable {
         var uploadRequest = request("POST", "files")
         uploadRequest.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
         let uploaded: Uploaded = try await decode(uploadRequest, upload: multipart)
-        guard Self.isID(uploaded.id) else { throw PixelLiftError.invalidResponse }
+        // File IDs are opaque and may use base64, including padding. Keep them within one path segment.
+        guard !uploaded.id.isEmpty, uploaded.id.utf8.count <= 512,
+              uploaded.id.utf8.allSatisfy({ Self.isIDByte($0) || $0 == 43 || $0 == 61 }) else {
+            throw PixelLiftError.invalidResponse
+        }
         return uploaded
     }
 
@@ -385,9 +389,11 @@ struct ReplicateClient: Sendable {
     }
 
     private static func isID(_ value: String) -> Bool {
-        !value.isEmpty && value.utf8.count <= 128 && value.utf8.allSatisfy {
-            (48...57).contains($0) || (65...90).contains($0) || (97...122).contains($0) || $0 == 45 || $0 == 95
-        }
+        !value.isEmpty && value.utf8.count <= 128 && value.utf8.allSatisfy(isIDByte)
+    }
+
+    private static func isIDByte(_ byte: UInt8) -> Bool {
+        (48...57).contains(byte) || (65...90).contains(byte) || (97...122).contains(byte) || byte == 45 || byte == 95
     }
 
     private static func writeMultipart(from png: URL, to file: URL, boundary: String) throws {
