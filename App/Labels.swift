@@ -29,6 +29,17 @@ extension PixelLiftError {
             case .downloading: return String(localized: "Replicateの結果を受信できませんでした。ダッシュボードで処理結果を確認してください。")
             case .preparing, .starting: return String(localized: "Replicateから読み取れない応答が返りました。")
             }
+        case .uploadResponse(let status, let bytes, let problem):
+            let detail: String
+            switch problem {
+            case .empty: detail = String(localized: "応答が空です。")
+            case .tooLarge: detail = String(localized: "応答が大きすぎます。")
+            case .missingID: detail = String(localized: "応答にファイルIDがありません。")
+            case .invalidID: detail = String(localized: "ファイルIDの形式を読み取れません。")
+            case .html: detail = String(localized: "APIの応答がHTMLでした。")
+            case .unreadable: detail = String(localized: "応答をJSONとして読み取れません。")
+            }
+            return String(localized: "Replicateのアップロード応答（HTTP \(status.formatted(.number.grouping(.never)))、\(bytes.formatted())バイト）。\(detail)")
         case .predictionOutputUnavailable:
             return String(localized: "Replicateで処理は完了しましたが、結果の画像URLを取得できませんでした。ダッシュボードで処理結果を確認してください。")
         case .unsafeURL: return String(localized: "Replicateの許可ドメイン以外のURLが返りました。")

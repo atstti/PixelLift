@@ -37,10 +37,15 @@ public protocol CloudUpscaleProvider: Sendable {
     ) async throws
 }
 
+public enum ReplicateUploadProblem: Equatable, Sendable {
+    case empty, tooLarge, missingID, invalidID, html, unreadable
+}
+
 public enum PixelLiftError: Error, Equatable, Sendable {
     case invalidImage, sourceChanged, dimensionsTooLarge, inputTooLarge, outputTooLarge, encodingFailed
     case cacheFull, cacheBusy, missingToken, invalidToken, invalidResponse, unsafeURL
     case replicateResponse(UpscaleStage), predictionOutputUnavailable
+    case uploadResponse(status: Int, bytes: Int, problem: ReplicateUploadProblem)
     case unauthorized, rateLimited, timedOut, connection, ambiguousSubmission
     case http(Int), predictionFailed, predictionCanceled, cloudCancellationUnconfirmed
     case wrongOutputDimensions, fileOperation
