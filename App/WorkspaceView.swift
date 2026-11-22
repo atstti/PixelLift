@@ -161,7 +161,7 @@ struct WorkspaceView: View {
                             .disabled(model.saving || model.maintainingCache)
                     }
                     if !item.status.isEnqueued, let result = item.result {
-                        LabeledContent("処理結果") {
+                        LabeledContent(item.status.canRetry ? "前回の処理結果" : "処理結果") {
                             Text("\(result.info.width.formatted(.number.grouping(.never))) × \(result.info.height.formatted(.number.grouping(.never))) px")
                         }
                         LabeledContent("処理済みプロバイダー", value: result.provider)

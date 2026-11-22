@@ -60,6 +60,68 @@ final class ReplicateTests: XCTestCase {
         XCTAssertEqual(parameters["image"] as? String, "https://api.replicate.com/v1/files/file1")
     }
 
+    func testIncompleteFileAndPredictionResponsesThenSingleImageOutput() async throws {
+        let (_, png, result) = try files()
+        let transport = ScriptTransport([
+            .init("POST /v1/files", 201, #"{"id":"file1"}"#),
+            .init("POST /v1/predictions", 201, #"{"id":"job1","status":"processing","output":{"progress":0.5}}"#),
+            .init("GET /v1/predictions/job1", 200, #"{"id":"job1","status":"succeeded","output":null}"#),
+            .init("GET /v1/predictions/job1", 200, #"{"id":"job1","status":"succeeded","output":["https://replicate.delivery/result.png"]}"#),
+            .init("GET /result.png", 200, "test-output"),
+            .init("DELETE /v1/files/file1", 204)
+        ])
+        let client = try ReplicateClient(token: "unit-test-token", transport: transport) { _ in }
+        try await client.run(png: png, output: result, options: options) { _ in }
+
+        let records = await transport.records
+        let payload = try XCTUnwrap(records[1].request.httpBody)
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: payload) as? [String: Any])
+        let parameters = try XCTUnwrap(object["input"] as? [String: Any])
+        XCTAssertEqual(parameters["image"] as? String, "https://api.replicate.com/v1/files/file1")
+        XCTAssertEqual(try Data(contentsOf: result), Data("test-output".utf8))
+    }
+
+    func testMalformedUploadReportsTheUploadStage() async throws {
+        let (_, png, result) = try files()
+        let transport = ScriptTransport([.init("POST /v1/files", 201, #"{"unexpected":"response"}"#)])
+        let client = try ReplicateClient(token: "unit-test-token", transport: transport) { _ in }
+        await expect(.replicateResponse(.uploading)) {
+            try await client.run(png: png, output: result, options: self.options) { _ in }
+        }
+    }
+
+    func testMissingOutputDoesNotCreateAnotherPrediction() async throws {
+        let (_, png, result) = try files()
+        let missing = #"{"id":"job1","status":"succeeded","output":null}"#
+        let transport = ScriptTransport([
+            .init("POST /v1/files", 201, upload),
+            .init("POST /v1/predictions", 201, missing),
+            .init("GET /v1/predictions/job1", 200, missing),
+            .init("DELETE /v1/files/file1", 204)
+        ])
+        let client = try ReplicateClient(token: "unit-test-token", transport: transport) { _ in }
+        await expect(.predictionOutputUnavailable) {
+            try await client.run(png: png, output: result, options: self.options) { _ in }
+        }
+        let pending = await transport.remaining
+        XCTAssertEqual(pending, 0)
+    }
+
+    #if os(macOS)
+    func testDeliveryAcceptsDecodedBytesWithDifferentContentLength() async throws {
+        let (_, _, result) = try files()
+        let config = URLSessionConfiguration.ephemeral
+        config.protocolClasses = [SessionStub.self]
+        let session = URLSession(configuration: config)
+        defer { session.invalidateAndCancel() }
+        let transport = SessionTransport(session: session)
+        let request = URLRequest(url: URL(string: "https://replicate.delivery/decoded-result")!)
+        let response = try await transport.download(request, to: result, limit: 1_024)
+        XCTAssertEqual(response.statusCode, 200)
+        XCTAssertEqual(try Data(contentsOf: result), Data("decoded image response".utf8))
+    }
+    #endif
+
     func testAuthorizationFailureIsSanitized() async throws {
         let (_, png, result) = try files()
         let transport = ScriptTransport([.init("POST /v1/files", 401, "sensitive body")])
@@ -188,9 +250,13 @@ private final class SessionStub: URLProtocol, @unchecked Sendable {
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
 
     override func startLoading() {
-        let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: "HTTP/1.1", headerFields: nil)!
+        let url = request.url!
+        let delivery = url.path == "/decoded-result"
+        let headers = delivery ? ["Content-Length": "35", "Content-Type": "image/png"] : nil
+        let body = delivery ? "decoded image response" : (request.value(forHTTPHeaderField: "Authorization") ?? "")
+        let response = HTTPURLResponse(url: url, statusCode: 200, httpVersion: "HTTP/1.1", headerFields: headers)!
         client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
-        client?.urlProtocol(self, didLoad: Data((request.value(forHTTPHeaderField: "Authorization") ?? "").utf8))
+        client?.urlProtocol(self, didLoad: Data(body.utf8))
         client?.urlProtocolDidFinishLoading(self)
     }
 
