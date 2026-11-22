@@ -4,7 +4,7 @@ macOS 14 以降向けの画像アップスケールアプリです。SwiftUI で
 
 ## ビルド済みプレビュー
 
-Apple Silicon 搭載の Mac（macOS 14 以降）で試せます。リリースの `PixelLiftAI-macOS-arm64.zip` を展開し、`PixelLift AI.app` を開きます。Xcode のインストールは不要です。プレビューにはアドホック署名を使用しています。 [macOS プレビューのダウンロード](https://github.com/atstti/PixelLift/releases/tag/v1.0.0-macos-preview)
+Apple Silicon 搭載の Mac（macOS 14 以降）で試せます。リリースの `PixelLiftAI-macOS-arm64.zip` を展開し、`PixelLift AI.app` を開きます。Xcode のインストールは不要です。プレビューにはアドホック署名を使用しています。 [macOS プレビューのダウンロード](https://github.com/atstti/PixelLift/releases/tag/v1.0.1-macos-preview)
 
 ## ソースからのビルド
 
@@ -26,7 +26,7 @@ du -sh 'build/Build/Products/Release/PixelLift AI.app'
 lipo -archs 'build/Build/Products/Release/PixelLift AI.app/Contents/MacOS/PixelLift AI'
 ```
 
-プロジェクトの署名設定はローカル実行用のアドホック署名です。一般配布用の `.app` は Developer ID Application で署名し、公証できます。目標サイズは 500 MB 以下です。GitHub Actions で作成した Apple Silicon 用 Release ビルドのディスク使用量は 1,580 KiB でした。プレビュー版の公証は未実施です。
+プロジェクトの署名設定はローカル実行用のアドホック署名です。一般配布用の `.app` は Developer ID Application で署名し、公証できます。目標サイズは 500 MB 以下です。GitHub Actions で作成した Apple Silicon 用 Release ビルドのディスク使用量は 1,584 KiB でした。プレビュー版の公証は未実施です。
 
 ## Replicate の設定
 
