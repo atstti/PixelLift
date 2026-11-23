@@ -101,7 +101,7 @@ internal static class Images
                         using var opaque = new SKBitmap(bitmap.Width, bitmap.Height, SKColorType.Bgra8888, SKAlphaType.Opaque);
                         using var canvas = new SKCanvas(opaque);
                         canvas.Clear(SKColors.White);
-                        canvas.DrawBitmap(bitmap, 0, 0);
+                        canvas.DrawBitmap(bitmap, 0, 0, new SKSamplingOptions(SKFilterMode.Nearest));
                         using var data = opaque.Encode(SKEncodedImageFormat.Jpeg, Math.Clamp(quality, 5, 100))
                             ?? throw new IOException("JPEGを書き出せませんでした。");
                         data.SaveTo(target);
@@ -219,7 +219,7 @@ internal static class Images
                 _ => SKMatrix.Identity
             };
             canvas.SetMatrix(matrix);
-            canvas.DrawBitmap(bitmap, 0, 0);
+            canvas.DrawBitmap(bitmap, 0, 0, new SKSamplingOptions(SKFilterMode.Nearest));
             return result;
         }
     }

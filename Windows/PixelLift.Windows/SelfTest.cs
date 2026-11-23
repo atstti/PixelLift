@@ -103,11 +103,13 @@ internal static class SelfTest
                 await window.AddAsync([source, webp]);
                 await window.ProcessAsync(window.Items.ToArray());
                 Expect(window.Items.Count == 2 && window.Items.All(row => row.Result is not null), "two-image UI batch");
+                await window.LoadPreviewAsync();
+                Expect(window.ComparisonAvailable, "before/after comparison");
                 await window.SaveAsync(window.Items.ToArray());
                 Expect(Directory.EnumerateFiles(directory, "sample_2x*.png").Count() >= 4, "batch outputs");
             }
             finally { window.Close(); }
-            checkedResults.Add("WPF window, two-image batch, and batch export");
+            checkedResults.Add("WPF window, before/after comparison, two-image batch, and batch export");
 
             File.WriteAllLines(report, checkedResults.Select(line => $"PASS {line}"));
         }

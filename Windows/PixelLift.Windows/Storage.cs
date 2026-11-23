@@ -39,7 +39,16 @@ internal sealed class Storage : IDisposable
 
     public Preferences Load()
     {
-        try { return JsonSerializer.Deserialize<Preferences>(File.ReadAllText(PreferencesPath)) ?? new(); }
+        try
+        {
+            var stored = JsonSerializer.Deserialize<Preferences>(File.ReadAllText(PreferencesPath)) ?? new();
+            return stored with
+            {
+                Scale = stored.Scale is 2 or 4 or 8 ? stored.Scale : 2,
+                Format = stored.Format is "PNG" or "JPEG" or "TIFF" ? stored.Format : "PNG",
+                JpegQuality = Math.Clamp(stored.JpegQuality, 5, 100)
+            };
+        }
         catch (Exception ex) when (ex is IOException or JsonException or UnauthorizedAccessException) { return new(); }
     }
 
@@ -61,6 +70,11 @@ internal sealed class Storage : IDisposable
     public void RemoveToken() => File.Delete(TokenPath);
 
     public long CacheSize => Directory.EnumerateFiles(Session).Sum(path => new FileInfo(path).Length);
+
+    public void ClearCache()
+    {
+        foreach (var file in Directory.EnumerateFiles(Session, "*.png")) File.Delete(file);
+    }
 
     public string ReserveResult()
     {

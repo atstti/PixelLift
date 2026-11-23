@@ -113,21 +113,34 @@ public partial class MainWindow : Window
         Refresh();
     }
 
-    private void ClearClicked(object sender, RoutedEventArgs e)
+    private async void ClearClicked(object sender, RoutedEventArgs e)
     {
         if (Busy || MessageBox.Show(this, "このウィンドウの一時結果を削除します。書き出した画像は保持されます。",
             "キャッシュを削除", MessageBoxButton.OKCancel, MessageBoxImage.Question) != MessageBoxResult.OK) return;
+        saving = true;
         ResetPreview();
-        foreach (var row in rows)
-        {
-            Storage.DeleteQuietly(row.Result);
-            row.Result = null;
-            row.Status = "未処理";
-            row.Error = null;
-        }
-        statusOverride = "キャッシュを削除しました。";
         Refresh();
-        _ = LoadPreviewAsync();
+        try
+        {
+            await previewGate.WaitAsync();
+            try { storage.ClearCache(); }
+            finally { previewGate.Release(); }
+            statusOverride = "キャッシュを削除しました。";
+        }
+        catch (Exception ex) { statusOverride = $"キャッシュの削除に失敗しました。{ex.Message}"; }
+        finally
+        {
+            foreach (var row in rows)
+            {
+                if (row.Result is not { } path || File.Exists(path)) continue;
+                row.Result = null;
+                row.Status = "未処理";
+                row.Error = null;
+            }
+            saving = false;
+            FinishOperation();
+            if (!closed) _ = LoadPreviewAsync();
+        }
     }
 
     private void SettingsChanged(object sender, RoutedEventArgs e)
@@ -359,12 +372,13 @@ public partial class MainWindow : Window
         preview?.Cancel();
         previewSize = null;
         BeforeImage.Source = AfterImage.Source = null;
+        BeforeImage.Clip = AfterImage.Clip = null;
         PreviewFrame.Width = PreviewFrame.Height = 0;
         CompareControls.Visibility = Visibility.Collapsed;
         Divider.Visibility = Visibility.Collapsed;
     }
 
-    private async Task LoadPreviewAsync()
+    internal async Task LoadPreviewAsync()
     {
         ResetPreview();
         if (Selected is not { } row)
@@ -438,6 +452,7 @@ public partial class MainWindow : Window
     {
         if (!initialized || AfterImage.Source is null) return;
         var x = PreviewFrame.Width * Split.Value;
+        BeforeImage.Clip = new RectangleGeometry(new Rect(0, 0, x, PreviewFrame.Height));
         AfterImage.Clip = new RectangleGeometry(new Rect(x, 0, PreviewFrame.Width - x, PreviewFrame.Height));
         Divider.Height = PreviewFrame.Height;
         Canvas.SetLeft(Divider, Math.Clamp(x - 1, 0, PreviewFrame.Width));
@@ -489,6 +504,7 @@ public partial class MainWindow : Window
     }
 
     internal IReadOnlyList<Row> Items => rows;
+    internal bool ComparisonAvailable => AfterImage.Source is not null && CompareControls.Visibility == Visibility.Visible;
 }
 
 internal sealed class Row(string path, ImageSize size) : INotifyPropertyChanged
