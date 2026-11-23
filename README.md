@@ -2,6 +2,10 @@
 
 macOS 14 以降向けの画像アップスケールアプリです。SwiftUI で表示し、AI 推論は Replicate で行います。Mac に AI モデルを保存しません。初期設定の Mock では、ローカル補間で画像の比較、キュー、書き出しを確認できます。
 
+## Windows 版
+
+Windows 11 x64 向けのアプリも配布しています。初期設定はローカル補間（Mock）です。 [Windows 版の手順](Windows/README.md) · [Windows 版リリース](https://github.com/atstti/PixelLift/releases/tag/v1.0.0-windows-preview)
+
 ## ビルド済みプレビュー
 
 Apple Silicon 搭載の Mac（macOS 14 以降）で試せます。リリースの `PixelLiftAI-macOS-arm64.zip` を展開し、`PixelLift AI.app` を開きます。Xcode のインストールは不要です。プレビューにはアドホック署名を使用しています。 [macOS プレビューのダウンロード](https://github.com/atstti/PixelLift/releases/tag/v1.0.2-macos-preview)

@@ -11,3 +11,8 @@ xcuserdata/
 .env.*
 *.p12
 *.mobileprovision
+
+# Windows build outputs
+[Ww]indows/**/bin/
+[Ww]indows/**/obj/
+[Ww]indows/Installer/Output/

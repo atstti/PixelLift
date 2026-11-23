@@ -1,0 +1,80 @@
+name: Windows preview
+
+on:
+  push:
+    branches: [codex/windows, main]
+    paths:
+      - 'Windows/**'
+      - '.github/workflows/windows.yml'
+    tags: ['v*-windows-preview']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    runs-on: windows-2025
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Publish the self-contained x64 app
+        shell: pwsh
+        run: |
+          dotnet --version
+          dotnet publish Windows/PixelLift.Windows/PixelLift.Windows.csproj -c Release -r win-x64 --self-contained true -o "$env:RUNNER_TEMP/PixelLift-publish"
+      - name: Build the installer
+        shell: pwsh
+        run: |
+          $inno = Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe'
+          if (-not (Test-Path $inno)) {
+            $inno = (Get-Command ISCC.exe -ErrorAction Stop).Source
+          }
+          $publish = Join-Path $env:RUNNER_TEMP 'PixelLift-publish'
+          & $inno "/DPublishDir=$publish" "/O$env:RUNNER_TEMP" Windows/Installer/PixelLift.iss
+          if ($LASTEXITCODE -ne 0) { throw "Inno Setup exited with code $LASTEXITCODE." }
+      - name: Install and test on Windows
+        shell: pwsh
+        run: |
+          $installer = Join-Path $env:RUNNER_TEMP 'PixelLiftAI-Windows-x64-Setup.exe'
+          $installPath = Join-Path $env:RUNNER_TEMP 'PixelLift-installed'
+          $arguments = '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', "/DIR=`"$installPath`""
+          $install = Start-Process $installer -ArgumentList $arguments -Wait -PassThru
+          if ($install.ExitCode -ne 0) { throw "Installer exited with code $($install.ExitCode)." }
+          $report = Join-Path $env:RUNNER_TEMP 'pixellift-windows-test.txt'
+          $app = Join-Path $installPath 'PixelLift.exe'
+          $smoke = Start-Process $app -ArgumentList '--self-test', "`"$report`"" -Wait -PassThru
+          if (Test-Path $report) { Get-Content $report }
+          if ($smoke.ExitCode -ne 0 -or -not (Test-Path $report)) { throw "Installed app smoke test failed ($($smoke.ExitCode))." }
+          $uninstaller = Join-Path $installPath 'unins000.exe'
+          $uninstall = Start-Process $uninstaller -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART' -Wait -PassThru
+          if ($uninstall.ExitCode -ne 0) { throw "Uninstaller exited with code $($uninstall.ExitCode)." }
+          Get-FileHash $installer -Algorithm SHA256
+      - name: Store the installer and test report
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: PixelLift-Windows-x64
+          path: |
+            ${{ runner.temp }}/PixelLiftAI-Windows-x64-Setup.exe
+            ${{ runner.temp }}/pixellift-windows-test.txt
+          if-no-files-found: error
+      - name: Publish tagged Windows preview
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $notes = Join-Path $env:RUNNER_TEMP 'pixellift-windows-release.md'
+          @'
+          Windows 11 x64 向けの PixelLift AI プレビューです。**PixelLiftAI-Windows-x64-Setup.exe** をダウンロードして起動してください。実行環境はインストーラーに含まれています。
+
+          初期設定はオフラインのローカル補間（Mock）です。2・4・8倍、前後比較、複数画像の処理、PNG・JPEG・TIFF 保存に対応します。Replicate は設定で選択でき、本番の API 呼び出しを伴わないテストを実行済みです。
+
+          インストーラーは未署名のため、Windows が確認を表示することがあります。
+          '@ | Set-Content -LiteralPath $notes -Encoding utf8
+          "[Windows のビルド・テスト記録]($env:GITHUB_SERVER_URL/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID)" | Add-Content -LiteralPath $notes
+          gh release create $env:GITHUB_REF_NAME "$env:RUNNER_TEMP/PixelLiftAI-Windows-x64-Setup.exe" "$env:RUNNER_TEMP/pixellift-windows-test.txt" --repo $env:GITHUB_REPOSITORY --verify-tag --title 'PixelLift AI 1.0.0 Windows Preview' --notes-file $notes --prerelease
